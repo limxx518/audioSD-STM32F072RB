@@ -57,6 +57,10 @@ Purpose : Generic application start
 SPI_InitTypeDef SPI_InitStruct;
 GPIO_InitTypeDef GPIO_InitStruct;
 
+//Function declarations
+void sendCMD(SPI_TypeDef* SPIx, uint8_t CMD, uint32_t arg, uint8_t crc);
+uint8_t SPI_xfer(SPI_TypeDef* SPIx, uint8_t data);
+
 /*********************************************************************
 *
 *       main()
@@ -73,6 +77,9 @@ int main(void) {
       4) Configure the SPI1 peripheral  
       5) Enable the SPI1 peripheral                */
 
+  GPIO_DeInit(GPIOA);               //Note: The GPIO_DeInit() function needs to be called before the RCC enable,
+                                    //this is because the RCC for peripherals get disabled in this function.
+
   //Configure APB peripheral to 16
   RCC_PCLKConfig(RCC_HCLK_Div16);
 
@@ -81,7 +88,6 @@ int main(void) {
   RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE);
 
   //Configure GPIO pins for MOSI, MISO and SCK, follow example provided by ST under SPI_Config() function
-  GPIO_DeInit(GPIOA);
 
   /*//This block only for debuggging purposes, determining why value on certain pin cannot be set
   GPIO_InitStruct.GPIO_Mode = GPIO_Mode_OUT;
@@ -94,7 +100,11 @@ int main(void) {
   GPIO_SetBits(GPIOA, GPIO_Pin_7);
   uint8_t check;
   check = GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_7);
-  check = GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_4);*/
+  check = GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_4);
+
+  GPIO_PinAFConfig(GPIOA, GPIO_PinSource5, GPIO_AF_0);    //SCK
+  GPIO_PinAFConfig(GPIOA, GPIO_PinSource6, GPIO_AF_0);    //MISO
+  GPIO_PinAFConfig(GPIOA, GPIO_PinSource7, GPIO_AF_0);    //MOSI */
   
   GPIO_InitStruct.GPIO_Mode = GPIO_Mode_AF;
   GPIO_InitStruct.GPIO_OType = GPIO_OType_PP;
@@ -122,6 +132,7 @@ int main(void) {
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource5, GPIO_AF_0);    //SCK
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource6, GPIO_AF_0);    //MISO
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource7, GPIO_AF_0);    //MOSI
+  //GPIO_PinAFConfig(GPIOA, GPIO_Pin_4, GPIO_AF_0);    //NSS
 
   //Configure SPI1 peripheral
   SPI_I2S_DeInit(SPI1);
@@ -139,7 +150,7 @@ int main(void) {
   SPI_RxFIFOThresholdConfig(SPI1, SPI_RxFIFOThreshold_QF);
 
   //Enable the SPI1 peripheral
-  //SPI_Cmd(SPI1, ENABLE);
+  SPI_Cmd(SPI1, ENABLE);
 
   /* Place SD card in SPI mode by setting MOSI and CS lines to logic 1 and toggle SCK >= 74 cycles
      We set this toggling to 80 cycles -> 10 packets of 0xFF. Then set CS line to logic 0 and send CMD0     */
@@ -148,6 +159,7 @@ int main(void) {
   check = GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_4);
   uint8_t i = 0;
   while(i < 10){
+    //SPI1->DR = (uint16_t)0xFF;
     SPI_SendData8(SPI1, 0xFF);
     while(SPI1->SR & SPI_SR_BSY);
     //Flush RX buffer
@@ -164,73 +176,116 @@ int main(void) {
   //while(!GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_6) );
 
   //Sending CMD0: packet structure is 48 bits (6 byte packets)
-  SPI_SendData8(SPI1,0x40);
-  while(SPI1->SR & SPI_SR_BSY);
-  SPI_ReceiveData8(SPI1);
-
-  SPI_SendData8(SPI1,0x00);
-  while(SPI1->SR & SPI_SR_BSY);
-  SPI_ReceiveData8(SPI1);
-
-  SPI_SendData8(SPI1,0x00);
-  while(SPI1->SR & SPI_SR_BSY);
-  SPI_ReceiveData8(SPI1);
-
-  SPI_SendData8(SPI1,0x00);
-  while(SPI1->SR & SPI_SR_BSY);
-  SPI_ReceiveData8(SPI1);
-
-  SPI_SendData8(SPI1,0x00);
-  while(SPI1->SR & SPI_SR_BSY);
-  SPI_ReceiveData8(SPI1);
-
-  SPI_SendData8(SPI1,0x95);
-  while(SPI1->SR & SPI_SR_BSY);
-  SPI_ReceiveData8(SPI1);
+  sendCMD(SPI1, 0x40, 0x00000000, 0x95);
 
   //Now, poll SD card to see if we get valid response of 0x01. To do this, keep sending junk 0xFF to toggle the SCK
   do{
     SPI_SendData8(SPI1, 0xFF);
     while(SPI1->SR & SPI_SR_BSY);
-    i++;
+    //i++;
   }
-  while(SPI_ReceiveData8(SPI1) != (uint8_t)0x01 && i < 16);
+  while(SPI_ReceiveData8(SPI1) != (uint8_t)0x01);
 
   i=0;
 
-  //Try sending CMD8 to see if there's a response
-  SPI_SendData8(SPI1, 0x48);
-  while(SPI1->SR & SPI_SR_BSY);
-  SPI_ReceiveData8(SPI1);
-
-  SPI_SendData8(SPI1, 0x00);
-  while(SPI1->SR & SPI_SR_BSY);
-  SPI_ReceiveData8(SPI1);
-
-  SPI_SendData8(SPI1, 0x00);
-  while(SPI1->SR & SPI_SR_BSY);
-  SPI_ReceiveData8(SPI1);
-
-  SPI_SendData8(SPI1, 0x01);
-  while(SPI1->SR & SPI_SR_BSY);
-  SPI_ReceiveData8(SPI1);
-
-  SPI_SendData8(SPI1, 0xAA);
-  while(SPI1->SR & SPI_SR_BSY);
-  SPI_ReceiveData8(SPI1);
-
-  SPI_SendData8(SPI1, 0x87);
-  while(SPI1->SR & SPI_SR_BSY);
-  SPI_ReceiveData8(SPI1);
+  //Now send CMD8 to determine version of SD card
+  sendCMD(SPI1, 0x48, 0x000001AA, 0x87);
 
   do{
     SPI_SendData8(SPI1, 0xFF);
     while(SPI1->SR & SPI_SR_BSY);
   }
-  while(!SPI_ReceiveData8(SPI1));
+  while(SPI_ReceiveData8(SPI1) != (uint8_t)0x01);
+  for(int k=0; k<4; k++){
+    SPI_SendData8(SPI1, 0xFF);
+    while(SPI1->SR & SPI_SR_BSY);
+    //check = SPI_ReceiveData8(SPI1);
+    check = (uint8_t) SPI1->DR;
+  }
 
-   while(1);
+  /*//Debugging purposes, set CS line high then low to see if card responds
+  GPIO_SetBits(GPIOA, GPIO_Pin_4);
+  if(GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_4))
+    GPIO_ResetBits(GPIOA, GPIO_Pin_4);*/
+  
+  //Also for debugging purpose, see if card responds to CMD58
+  sendCMD(SPI1, (0x40|58), 0x00000000, 0x00);
+  do{
+    SPI_SendData8(SPI1, 0xFF);
+    while(SPI1->SR & SPI_SR_BSY);
+    //check = SPI_ReceiveData8(SPI1);
+    check =(uint8_t) SPI1->DR;
+  }
+  while(check);
+  for(int k=0; k<4; k++){
+    check = SPI_xfer(SPI1, 0xFF);
+  }
+
+  do{
+  //Verified that SD card is working. Now, start the SD card initialization process by sending CMD55 followed by CMD41
+  //SPI_xfer(SPI1, 0xFF);
+  sendCMD(SPI1, (0x40|0x37), 0x00000000, 0x00);
+  do{
+    check = SPI_xfer(SPI1, 0xFF);
+    i++;
+  }
+  while(check > (uint8_t) 0x01 && i<5);
+
+  i=0;
+
+  sendCMD(SPI1, (0x40|0x29), 0x40000000, 0x00);  
+  SPI_xfer(SPI1, 0xFF);
+  check = SPI_xfer(SPI1, 0xFF);
+  //SPI_SendData8(SPI1, 0xFF);
+  //while(SPI1->SR & SPI_SR_BSY);
+  //check = SPI_ReceiveData8(SPI1);
+  }
+  //while(check != (uint8_t) 0x01 | check != (uint8_t) 0x05 || check != (uint8_t) 0x00);
+  while(check);
+
+  /*do{
+    sendCMD(SPI1, (0x40|0x37), 0x00000000, 0x00);
+    sendCMD(SPI1, (0x40|0x29), 0x40000000, 0x00);
+    check = SPI_xfer(SPI1, 0xFF);
+  }
+  while(check);*/
+
+  //Now, check if operating voltage is correct using CMD58 
+  SPI_xfer(SPI1, 0xFF);
+  sendCMD(SPI1, (0x40|58), 0x00000000, 0x00);
+  do{
+    SPI_SendData8(SPI1, 0xFF);
+    while(SPI1->SR & SPI_SR_BSY);
+    check = SPI_ReceiveData8(SPI1);
+  }
+  while(check);
+  for(int k=0; k<4; k++){
+    check = SPI_xfer(SPI1, 0xFF);   //see if CCS bit is set, if set it's a SDHC card
+  }
+
+  //Finally got through initialization!! Since CCS bit is set, write operations use block addressing (LBA) Each 
+  //block is 512 bytes.
+
+
 }
+
+
+void sendCMD(SPI_TypeDef* SPIx, uint8_t CMD, uint32_t arg, uint8_t crc){
+  SPI_xfer(SPIx, CMD);
+  SPI_xfer(SPIx, (uint8_t)(arg>>24));
+  SPI_xfer(SPIx, (uint8_t)(arg>>16));
+  SPI_xfer(SPIx, (uint8_t)(arg>>8));
+  SPI_xfer(SPIx, (uint8_t)(arg));
+  SPI_xfer(SPIx, crc);
+}
+
+uint8_t SPI_xfer(SPI_TypeDef* SPIx, uint8_t data){
+  SPI_SendData8(SPIx, data);
+  while(SPIx->SR & SPI_SR_BSY);
+  //return SPI_ReceiveData8(SPIx);
+  return (uint8_t) SPIx->DR;
+}
+
 
 
 /*************************** End of file ****************************/

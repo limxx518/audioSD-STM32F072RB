@@ -739,6 +739,7 @@ void SPI_SendData8(SPI_TypeDef* SPIx, uint8_t Data)
   spixbase += 0x0C;
   
   *(__IO uint8_t *) spixbase = Data;
+  //SPIx->DR = (uint8_t) Data;
 }
 
 /**
