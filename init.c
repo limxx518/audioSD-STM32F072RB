@@ -121,18 +121,18 @@ void setup_audio_peripherals(uint32_t mem_base_addr, uint32_t sampleRate){
   //the best granularity for the desired timing frequency
   //NOTE:The frequency of CK_PSC will be at 1MHz due to the APB prescaler != 1 as referenced under init_peripherals() called earlier
   //TODO: Make a conditional statement to replace 1Mhz value for CK_PSC below
-  TIM_DeInit(TIM16);                                 
-  TIM_Cmd(TIM16, DISABLE);
+  TIM_DeInit(TIM6);                                 
+  TIM_Cmd(TIM6, DISABLE);
   TIM_InitStruct.TIM_Prescaler = 1000000/(sampleRate * 65535);
   TIM_InitStruct.TIM_CounterMode = TIM_CounterMode_Up;
   TIM_InitStruct.TIM_Period = (sampleRate * 1000000) / TIM_InitStruct.TIM_Prescaler - 1;
   //Clock division and repetition counter bits not applicable for TIM6
-  TIM_TimeBaseInit(TIM16, &TIM_InitStruct);
+  TIM_TimeBaseInit(TIM6, &TIM_InitStruct);
   //Clear the TIM16 update flag set by above function call(expected, not confirmed)
   //    -->Reason being that intended first DMA transfer to begin on first timer overflow
-  TIM_ClearFlag(TIM16, TIM_FLAG_Update);
+  TIM_ClearFlag(TIM6, TIM_FLAG_Update);
   //Select the update event as the trigger output for TIM6
-  TIM_SelectOutputTrigger(TIM16, TIM_TRGOSource_Update);
+  TIM_SelectOutputTrigger(TIM6, TIM_TRGOSource_Update);
 
   //Init DAC
   DAC_InitStruct.DAC_Trigger =  DAC_Trigger_T6_TRGO;
@@ -144,5 +144,5 @@ void setup_audio_peripherals(uint32_t mem_base_addr, uint32_t sampleRate){
   //Enable the DMA peripheral request from DAC
   DAC_DMACmd(DAC_Channel_1, ENABLE);
   //Enable the TIM16 clock
-  TIM_Cmd(TIM16, ENABLE);
+  TIM_Cmd(TIM6, ENABLE);
 }

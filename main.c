@@ -124,6 +124,8 @@ int main(void){
   //char wav_header[44];
   FIL fil;              //File object
   UINT bytes_read;
+  uint32_t count;
+  uint8_t toggle = 0;     //toggle = 0 -> wavBuffer1, toggle = 1 -> wavBuffer2
 
   //WAV_HEADER wav_header;
 
@@ -151,6 +153,35 @@ int main(void){
       fresult = f_read(&fil, &wavBuffer1, sizeof(wavBuffer1), &bytes_read);
       if(fresult == FR_OK && bytes_read == sizeof(wavBuffer1)){
         setup_audio_peripherals((uint32_t)&wavBuffer1, wav_header.sampleRate);
+      }
+      f_read(&fil, &wavBuffer2, sizeof(wavBuffer2), &bytes_read);
+      count = wav_header.data_size / wav_header.blockAlign;
+      count = count - 2;
+      while(count){
+        //Poll the DMA Transfer Complete Flag and wait till it's set, indicating complete transfer of data from buffer
+        //Disable DMA, and reconfig it to grab data from the other buffer. Then, grab another 512 block units
+        //from SD card
+        while(DMA_GetFlagStatus(DMA1_FLAG_TC3) == RESET);
+        //Clear the flag
+        DMA_ClearFlag(DMA1_FLAG_GL3);
+        DMA_ClearFlag(DMA1_FLAG_TC3);
+        DMA_Cmd(DMA1_Channel3, DISABLE);
+        if(!toggle){
+          toggle ^= 1;
+          DMA1_Channel3->CMAR = (uint32_t)&wavBuffer2;
+          DMA1_Channel3->CNDTR = 512;
+          DMA_Cmd(DMA1_Channel3, ENABLE);
+          f_read(&fil, &wavBuffer1, sizeof(wavBuffer1), &bytes_read);
+        }
+        else{
+          toggle ^= 1;
+          DMA1_Channel3->CMAR = (uint32_t)&wavBuffer1;
+          DMA1_Channel3->CNDTR = 512;
+          DMA_Cmd(DMA1_Channel3, ENABLE);
+          f_read(&fil, &wavBuffer2, sizeof(wavBuffer2), &bytes_read);
+        }
+        //Decrement the value of count by one blockAlign size
+        count--;
       }
     }
     /*fresult = f_read(&fil, wav_header, 44, &bytes_read);
